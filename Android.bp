@@ -1,0 +1,75 @@
+package {
+    default_applicable_licenses: ["vehicle-hal-adapter-license"],
+}
+
+license {
+    name: "vehicle-hal-adapter-license",
+    visibility: [":__subpackages__"],
+    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
+    license_text: ["LICENSE"],
+}
+
+java_library {
+    name: "VehicleHalAdapterContracts",
+    srcs: [
+        "car-lib/src/android/car/hardware/**/*.java",
+        "car-lib/src/android/car/hardware/**/*.aidl",
+        "car-lib/src/com/android/car/internal/**/*.java",
+        "car-lib/src/com/android/car/internal/**/*.aidl",
+        "car-lib/src/android/car/diagnostic/**/*.java",
+        "car-lib/src/android/car/diagnostic/**/*.aidl",
+        "car-lib/src/android/car/drivingstate/**/*.java",
+        "car-lib/src/android/car/drivingstate/**/*.aidl",
+        "car-lib/src/android/car/media/**/*.java",
+        "car-lib/src/android/car/watchdog/**/*.java",
+        "car-lib/src/android/car/watchdog/**/*.aidl",
+        "car-lib/src/android/car/vms/**/*.java",
+        "car-lib/src/android/car/vms/**/*.aidl",
+        "car-lib/src/android/car/user/**/*.java",
+        "car-lib/src/android/car/user/**/*.aidl",
+        "car-lib/src/android/car/input/**/*.java",
+        "car-lib/src/android/car/input/**/*.aidl",
+        "car-lib/src/android/car/os/**/*.java",
+        "car-lib/src/android/car/os/**/*.aidl",
+        "car-lib/src/android/car/telemetry/**/*.java",
+        "car-lib/src/android/car/telemetry/**/*.aidl",
+        "car-lib/src/android/car/projection/**/*.java",
+        "car-lib/src/android/car/projection/**/*.aidl",
+        "car-lib/src/android/car/admin/**/*.java",
+        "car-lib/src/android/car/admin/**/*.aidl",
+        "car-lib/src/android/car/app/**/*.java",
+        "car-lib/src/android/car/app/**/*.aidl",
+        "car-lib/src/android/car/content/**/*.java",
+        "car-lib/src/android/car/content/**/*.aidl",
+        "car-lib/src/android/car/cluster/**/*.java",
+        "car-lib/src/android/car/cluster/**/*.aidl",
+        "car-lib/src/android/car/evs/**/*.java",
+        "car-lib/src/android/car/evs/**/*.aidl",
+        "car-lib/src/android/car/occupantawareness/**/*.java",
+        "car-lib/src/android/car/occupantawareness/**/*.aidl",
+    ],
+    platform_apis: true,
+}
+
+java_library {
+    name: "VehicleHalAdapterRuntime",
+    srcs: [
+        "service/src/com/android/car/hal/**/*.java",
+        "service/src/com/android/car/*VehicleStub.java",
+        "service/src/com/android/car/VehicleStub.java",
+        "vehicle-hal-support-lib/src/**/*.java",
+    ],
+    static_libs: ["VehicleHalAdapterContracts"],
+    platform_apis: true,
+}
+
+java_test {
+    name: "VehicleHalAdapterFocusedTests",
+    srcs: [
+        "tests/carservice_test/src/**/*.java",
+        "tests/vehiclehal_test/src/**/*.java",
+    ],
+    static_libs: ["VehicleHalAdapterRuntime"],
+    platform_apis: true,
+    test_suites: ["device-tests"],
+}
