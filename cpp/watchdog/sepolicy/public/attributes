@@ -1,3 +1,0 @@
-# All car watchdog clients
-attribute carwatchdogclient_domain;
-expandattribute carwatchdogclient_domain true;

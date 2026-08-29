@@ -1,4 +1,0 @@
-service vold_seed_binding /system/bin/vehicle_binding_util set_binding
-    oneshot
-    user root
-    group root

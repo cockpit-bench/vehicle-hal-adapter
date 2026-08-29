@@ -1,4 +1,0 @@
-# Car power policy callback domain
-binder_use(carpowerpolicycallback_domain)
-
-allow carpowerpolicycallback_domain carpowerpolicyd_service:service_manager find;

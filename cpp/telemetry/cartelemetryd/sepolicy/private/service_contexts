@@ -1,2 +1,0 @@
-android.frameworks.automotive.telemetry.ICarTelemetry/default  u:object_r:cartelemetryd_service:s0
-android.automotive.telemetry.internal.ICarTelemetryInternal/default  u:object_r:cartelemetryd_service:s0

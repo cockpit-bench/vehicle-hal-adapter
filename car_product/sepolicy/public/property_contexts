@@ -1,3 +1,0 @@
-android.car.number_pre_created_guests            u:object_r:car_bootuser_prop:s0
-android.car.number_pre_created_users             u:object_r:car_bootuser_prop:s0
-android.car.systemuser.bootuseroverrideid        u:object_r:car_bootuser_prop:s0

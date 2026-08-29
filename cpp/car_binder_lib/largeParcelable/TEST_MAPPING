@@ -1,7 +1,0 @@
-{
-  "presubmit": [
-    {
-      "name": "android-automotive-large-parcelable-test"
-    }
-  ]
-}

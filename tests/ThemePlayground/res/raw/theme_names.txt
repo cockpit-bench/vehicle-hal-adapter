@@ -1,3 +1,0 @@
-Theme.DeviceDefault
-Theme.DeviceDefault.Light
-Theme.DeviceDefault.NoActionBar
