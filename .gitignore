@@ -8,3 +8,17 @@ gen/
 __pycache__
 .idea
 /bin/
+
+# Native build products are disposable and never part of repository source.
+.native-build/
+.work/
+build/
+out/
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+test-results.xml
+coverage.xml
+coverage.html

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package fw03.vehicle.v1;
+
+option optimize_for = LITE_RUNTIME;
+
+message ApiVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+  uint32 patch = 3;
+  uint32 min_compatible_major = 4;
+}
+
+enum ErrorCode {
+  ERROR_CODE_OK = 0;
+  ERROR_CODE_INVALID_ARGUMENT = 1;
+  ERROR_CODE_NOT_SUPPORTED = 2;
+  ERROR_CODE_PERMISSION_DENIED = 3;
+  ERROR_CODE_TIMEOUT = 4;
+  ERROR_CODE_TRANSPORT_DOWN = 5;
+  ERROR_CODE_STALE_VALUE = 6;
+  ERROR_CODE_CANCELLED = 7;
+  ERROR_CODE_INTERNAL = 8;
+  ERROR_CODE_INCOMPATIBLE_VERSION = 9;
+}
+
+message PropertyKey {
+  uint32 property_id = 1;
+  uint32 area_id = 2;
+}
+
+message PropertyValue {
+  PropertyKey key = 1;
+  int64 monotonic_timestamp_ns = 2;
+  uint32 status = 3;
+  oneof value {
+    bool bool_value = 10;
+    sint32 int32_value = 11;
+    sint64 int64_value = 12;
+    float float_value = 13;
+    double double_value = 14;
+    string string_value = 15;
+    bytes bytes_value = 16;
+  }
+}
+
+message GetPropertyRequest {
+  uint64 request_id = 1;
+  PropertyKey key = 2;
+}
+
+message SetPropertyRequest {
+  uint64 request_id = 1;
+  PropertyValue value = 2;
+}
+
+message SubscribeRequest {
+  uint64 request_id = 1;
+  PropertyKey key = 2;
+  float sample_rate_hz = 3;
+}
+
+message UnsubscribeRequest {
+  uint64 request_id = 1;
+  PropertyKey key = 2;
+}
+
+message PropertyResponse {
+  uint64 request_id = 1;
+  ErrorCode error = 2;
+  string detail = 3;
+  optional PropertyValue value = 4;
+}
+
+message PropertyEvent {
+  uint64 sequence = 1;
+  PropertyValue value = 2;
+}
+
+message CapabilityHello {
+  ApiVersion requested_version = 1;
+}
+
+message CapabilityHelloAck {
+  ApiVersion negotiated_version = 1;
+  ErrorCode error = 2;
+  string detail = 3;
+}
+
+service VehicleHalContract {
+  rpc GetProperty(GetPropertyRequest) returns (PropertyResponse);
+  rpc SetProperty(SetPropertyRequest) returns (PropertyResponse);
+  rpc Subscribe(SubscribeRequest) returns (PropertyResponse);
+  rpc Unsubscribe(UnsubscribeRequest) returns (PropertyResponse);
+  rpc StreamEvents(SubscribeRequest) returns (stream PropertyEvent);
+}
