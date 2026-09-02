@@ -1,0 +1,18 @@
+add_library(fw03_vehicle_service STATIC
+    src/daemon_options.cpp
+    src/vehicle_client_session.cpp
+    src/vehicle_service.cpp)
+
+target_include_directories(fw03_vehicle_service PUBLIC include)
+target_link_libraries(
+    fw03_vehicle_service
+    PUBLIC
+        fw03_vehicle_middleware
+        fw03_vehicle_contract)
+fw03_apply_warnings(fw03_vehicle_service)
+fw03_apply_runtime_checks(fw03_vehicle_service)
+
+add_executable(vehicle_gateway_daemon src/main.cpp)
+target_link_libraries(vehicle_gateway_daemon PRIVATE fw03_vehicle_service fw03_platform_adapter)
+fw03_apply_warnings(vehicle_gateway_daemon)
+fw03_apply_runtime_checks(vehicle_gateway_daemon)
