@@ -17,8 +17,8 @@ namespace fw03::application {
 
 struct CallerContext final {
     std::string client_name;
-    std::set<std::uint32_t> readable_properties;
-    std::set<std::uint32_t> writable_properties;
+    std::set<api::PropertyKey> readable_properties;
+    std::set<api::PropertyKey> writable_properties;
 };
 
 struct SessionCallbacks final {
@@ -60,11 +60,13 @@ public:
     [[nodiscard]] common::Result<void, api::VehicleError> Subscribe(
         api::SessionId session_id,
         api::PropertyKey key,
-        float sample_rate_hz);
+        float sample_rate_hz,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds{1000});
 
     [[nodiscard]] common::Result<void, api::VehicleError> Unsubscribe(
         api::SessionId session_id,
-        api::PropertyKey key);
+        api::PropertyKey key,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds{1000});
 
     void PollTimeouts();
     [[nodiscard]] common::Result<api::ApiVersion, api::VehicleError> Reconnect();
@@ -81,12 +83,13 @@ private:
 
     [[nodiscard]] common::Result<void, api::VehicleError> CheckAccess(
         api::SessionId session_id,
-        std::uint32_t property_id,
+        api::PropertyKey key,
         bool write) const;
     void DispatchEvent(api::SessionId session_id, api::PropertyEvent event);
     void DispatchTransportState(bool connected, api::VehicleError error);
 
     middleware::VehiclePropertyGateway& gateway_;
+    std::mutex subscription_mutex_;
     mutable std::mutex mutex_;
     std::map<api::SessionId, Session> sessions_;
     api::SessionId next_session_id_{1U};

@@ -32,6 +32,20 @@
       }
     },
     {
+      "name": "host-release-sa8155",
+      "inherits": "host-release",
+      "cacheVariables": {
+        "FW03_PLATFORM_PROFILE": "sa8155"
+      }
+    },
+    {
+      "name": "host-release-sa8295",
+      "inherits": "host-release",
+      "cacheVariables": {
+        "FW03_PLATFORM_PROFILE": "sa8295"
+      }
+    },
+    {
       "name": "host-sanitized",
       "inherits": "host-debug",
       "cacheVariables": {
@@ -50,6 +64,8 @@
   "buildPresets": [
     { "name": "host-debug", "configurePreset": "host-debug" },
     { "name": "host-release", "configurePreset": "host-release" },
+    { "name": "host-release-sa8155", "configurePreset": "host-release-sa8155" },
+    { "name": "host-release-sa8295", "configurePreset": "host-release-sa8295" },
     { "name": "host-sanitized", "configurePreset": "host-sanitized" },
     { "name": "coverage", "configurePreset": "coverage" }
   ],
@@ -57,6 +73,16 @@
     {
       "name": "host-debug",
       "configurePreset": "host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-release-sa8155",
+      "configurePreset": "host-release-sa8155",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-release-sa8295",
+      "configurePreset": "host-release-sa8295",
       "output": { "outputOnFailure": true }
     },
     {

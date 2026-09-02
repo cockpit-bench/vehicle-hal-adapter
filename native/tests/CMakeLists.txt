@@ -48,6 +48,36 @@ target_link_libraries(contract_common_integration_test PRIVATE fw03_test_support
 fw03_apply_warnings(contract_common_integration_test)
 fw03_apply_runtime_checks(contract_common_integration_test)
 
+add_executable(client_ipc_vertical_integration_test client_ipc_vertical_integration_test.cpp)
+target_link_libraries(client_ipc_vertical_integration_test PRIVATE fw03_test_support GTest::gtest_main)
+fw03_apply_warnings(client_ipc_vertical_integration_test)
+fw03_apply_runtime_checks(client_ipc_vertical_integration_test)
+
+add_executable(daemon_options_test daemon_options_test.cpp)
+target_link_libraries(daemon_options_test PRIVATE fw03_test_support GTest::gtest_main)
+fw03_apply_warnings(daemon_options_test)
+fw03_apply_runtime_checks(daemon_options_test)
+
+get_filename_component(fw03_protoc_bin_dir "${FW03_PROTOC_EXECUTABLE}" DIRECTORY)
+get_filename_component(fw03_protoc_root "${fw03_protoc_bin_dir}" DIRECTORY)
+set(fw03_protoc_include_dir "${fw03_protoc_root}/include")
+if(NOT EXISTS "${fw03_protoc_include_dir}/google/protobuf/descriptor.proto")
+    message(FATAL_ERROR
+        "FW-03 pinned protoc distribution is missing google/protobuf/descriptor.proto")
+endif()
+
+add_test(
+    NAME contract_descriptor_schema_lock
+    COMMAND "${CMAKE_COMMAND}"
+        "-DPROTOC_EXECUTABLE=${FW03_PROTOC_EXECUTABLE}"
+        "-DPROTOC_INCLUDE_DIR=${fw03_protoc_include_dir}"
+        "-DPROTO_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/../contract"
+        "-DDESCRIPTOR=${CMAKE_CURRENT_BINARY_DIR}/../contract/generated/vehicle_hal_contract.pb"
+        "-DBASELINE_SHA256_FILE=${CMAKE_CURRENT_SOURCE_DIR}/../contract/vehicle_hal_contract.descriptor.sha256"
+        "-DREPEAT_DESCRIPTOR=${CMAKE_CURRENT_BINARY_DIR}/vehicle_hal_contract.repeat.pb"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/VerifyDescriptor.cmake")
+set_tests_properties(contract_descriptor_schema_lock PROPERTIES TIMEOUT 10)
+
 include(GoogleTest)
 gtest_discover_tests(
     vehicle_service_integration_test
@@ -67,5 +97,15 @@ gtest_discover_tests(
 gtest_discover_tests(
     contract_common_integration_test
     TEST_PREFIX "contract_common."
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES TIMEOUT 10)
+gtest_discover_tests(
+    client_ipc_vertical_integration_test
+    TEST_PREFIX "client_ipc."
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES TIMEOUT 20)
+gtest_discover_tests(
+    daemon_options_test
+    TEST_PREFIX "daemon_options."
     DISCOVERY_MODE PRE_TEST
     PROPERTIES TIMEOUT 10)

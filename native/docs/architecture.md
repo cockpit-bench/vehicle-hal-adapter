@@ -7,12 +7,12 @@ The native build has six production ownership modules and one composition execut
 | Module | Owns | May depend on |
 |---|---|---|
 | `fw03_common` | result type, clock boundary, ordered callback executor | C++17 and threads |
-| `fw03_vehicle_contract` | property types, stable errors, semantic versions, wire validation | common |
-| `fw03_platform_adapter` | host UNIX socket calls and future target SDK calls | contract |
+| `fw03_vehicle_contract` | property types, stable errors, semantic versions, wire validation, neutral client-session port | common |
+| `fw03_platform_adapter` | downstream HAL transport, authenticated client listener, socket ownership | contract |
 | `fw03_vehicle_hal` | pending requests, deadlines, subscription aggregation, reconnect replay | platform, contract, common |
 | `fw03_vehicle_middleware` | cache, event sequence filtering, per-client callbacks | HAL |
-| `fw03_vehicle_service` | client sessions, permissions, compatibility checks, callback lifetime | middleware |
-| `vehicle_gateway_daemon` | concrete assembly, signal handling, timeout polling, reconnect backoff | service and host adapter |
+| `fw03_vehicle_service` | client request dispatch, sessions, permissions, compatibility, callback lifetime | middleware and neutral contract interfaces |
+| `vehicle_gateway_daemon` | two-endpoint assembly, signal handling, timeout polling, reconnect backoff | service and host adapter |
 
 Production dependencies point down this table and never back toward application. Platform-specific
 headers and socket calls are confined to `platform/src`. A target adapter is enabled only when its
@@ -21,15 +21,20 @@ fails configuration instead of linking a success-returning placeholder.
 
 ## Forward request path
 
-1. A client opens a version-negotiated `VehicleService` session with explicit readable and writable
-   property sets.
-2. Get or set enters `VehiclePropertyGateway`; an available cache entry may satisfy a preferred-cache
+1. The platform listener authenticates UNIX peer credentials, requires a version hello, and creates
+   one `VehicleClientSession` with explicit readable and writable property sets.
+2. The client dispatcher rejects replayed request IDs, then routes get or set into
+   `VehiclePropertyGateway`; an available cache entry may satisfy a preferred-cache
    get, while an uncached request continues to the HAL.
 3. `VehicleHalAdapter` allocates a non-zero request ID, records the deadline and completion owner,
    validates the contract, and sends through `VehicleTransport`.
-4. The selected platform adapter serializes a bounded frame and transfers it to the vehicle peer.
-5. A matching response removes the pending request exactly once. An expired request is removed by
+4. The selected downstream platform adapter serializes a bounded frame and transfers it to the
+   vehicle peer.
+5. A matching HAL response removes the pending request exactly once and is remapped to the original
+   client request ID. An expired request is removed by
    `PollTimeouts`; a later response with the old ID is ignored.
+6. The client connection serializes the response on its own writer lock. A disconnected client
+   closes its service session and releases all subscriptions without retaining callback ownership.
 
 ## Reverse event and death path
 
@@ -47,9 +52,14 @@ client callbacks.
 
 ## Concurrency and shutdown
 
-- The POSIX reader thread owns blocking reads. A separate send mutex prevents interleaved frames.
+- Each POSIX reader thread owns blocking reads. A separate send mutex prevents interleaved frames;
+  endpoint close uses the same lock before the descriptor can be reused.
 - HAL pending and subscription state, gateway cache, and service sessions each have a private mutex;
   callbacks are copied then invoked outside those locks.
+- Subscription lifecycle has a dedicated serialization mutex, so service state is never held across
+  downstream transport I/O and close cannot leave a ghost subscription.
+- The client endpoint refuses regular files and live sockets, removes only a verified stale socket,
+  records the bound inode, and unlinks only the endpoint it owns during shutdown.
 - `SerialExecutor` is the sole production callback thread owner and supports drain before process
   teardown.
 - `Shutdown` is idempotent at service, gateway, HAL, transport, and executor boundaries. Transport
@@ -57,4 +67,6 @@ client callbacks.
   objects.
 
 Build and include graphs are emitted through `CMAKE_EXPORT_COMPILE_COMMANDS` and CMake Graphviz.
-Tests and downloaded GoogleTest sources are excluded from the six production-module count.
+Tests and downloaded GoogleTest sources are excluded from the six production-module count. The
+canonical protobuf descriptor is generated with exact `protoc 25.3` and embedded into the contract
+library, making schema drift a compile-time concern rather than an unconsumed documentation file.

@@ -5,6 +5,7 @@
 #include "fw03/api/vehicle_property.h"
 
 #include <cstdint>
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -35,6 +36,13 @@ struct PropertyEvent final {
     std::uint64_t sequence{0U};
     VehiclePropertyValue value;
 };
+
+struct ContractDescriptorView final {
+    const std::uint8_t* data{nullptr};
+    std::size_t size{0U};
+};
+
+[[nodiscard]] ContractDescriptorView VehicleHalContractDescriptor() noexcept;
 
 [[nodiscard]] common::Result<void, VehicleError> ValidateRequest(
     const TransportRequest& request);

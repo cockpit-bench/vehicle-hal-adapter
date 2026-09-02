@@ -3,6 +3,7 @@ if(NOT FW_PLATFORM STREQUAL "host_posix")
 endif()
 
 add_library(fw03_platform_adapter STATIC
+    src/host_posix_client_ipc_server.cpp
     src/host_posix_vehicle_transport.cpp)
 
 target_include_directories(fw03_platform_adapter PUBLIC include)

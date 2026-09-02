@@ -55,6 +55,30 @@ SubscriptionChange VehicleSubscriptionRegistry::Remove(
     return {previous_rate != effective_rate, false, effective_rate};
 }
 
+std::vector<SubscriptionUpdate> VehicleSubscriptionRegistry::RemoveSubscriber(
+    api::SubscriberId subscriber_id) {
+    std::vector<SubscriptionUpdate> updates;
+    for (auto property = subscriptions_.begin(); property != subscriptions_.end();) {
+        const float previous_rate = EffectiveRate(property->second);
+        if (property->second.erase(subscriber_id) == 0U) {
+            ++property;
+            continue;
+        }
+        const auto key = property->first;
+        if (property->second.empty()) {
+            property = subscriptions_.erase(property);
+            updates.push_back({key, {true, true, 0.0F}});
+            continue;
+        }
+        const float effective_rate = EffectiveRate(property->second);
+        ++property;
+        if (previous_rate != effective_rate) {
+            updates.push_back({key, {true, false, effective_rate}});
+        }
+    }
+    return updates;
+}
+
 std::vector<EffectiveSubscription> VehicleSubscriptionRegistry::Snapshot() const {
     std::vector<EffectiveSubscription> result;
     result.reserve(subscriptions_.size());

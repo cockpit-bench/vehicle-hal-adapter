@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -29,7 +30,7 @@ protected:
 };
 
 TEST_F(VehicleServiceIntegration, GetRoundTripTraversesServiceGatewayHalAndTransport) {
-    EXPECT_CALL(*stack_.transport, Send(testing::_)).Times(1);
+    EXPECT_CALL(*stack_.transport, Send(testing::_, testing::_)).Times(1);
     std::optional<middleware::ValueResult> completion;
     const auto request = stack_.service.Get(
         session_id_,
@@ -55,7 +56,7 @@ TEST_F(VehicleServiceIntegration, GetRoundTripTraversesServiceGatewayHalAndTrans
 }
 
 TEST_F(VehicleServiceIntegration, SetRoundTripPreservesTypedValueAndCompletion) {
-    EXPECT_CALL(*stack_.transport, Send(testing::_)).Times(1);
+    EXPECT_CALL(*stack_.transport, Send(testing::_, testing::_)).Times(1);
     std::optional<middleware::ValueResult> completion;
     const auto value = IntValue(kCabinTemperatureKey, 23, 2000);
     const auto request = stack_.service.Set(
@@ -124,7 +125,7 @@ TEST_F(VehicleServiceIntegration, RejectsIncompatibleClientMajorVersion) {
     incompatible.major = 2U;
     incompatible.min_compatible_major = 2U;
     const auto session = stack_.service.OpenSession(
-        {"future-client", {kVehicleSpeedProperty}, {kVehicleSpeedProperty}},
+        {"future-client", {kVehicleSpeedKey}, {kVehicleSpeedKey}},
         incompatible,
         {[](api::PropertyEvent) {}, {}});
     ASSERT_FALSE(session);
@@ -133,7 +134,7 @@ TEST_F(VehicleServiceIntegration, RejectsIncompatibleClientMajorVersion) {
 
 TEST_F(VehicleServiceIntegration, EnforcesPerSessionPropertyAccess) {
     const auto restricted = stack_.service.OpenSession(
-        {"read-only-client", {kVehicleSpeedProperty}, {}},
+        {"read-only-client", {kVehicleSpeedKey}, {}},
         api::CurrentApiVersion(),
         {[](api::PropertyEvent) {}, {}});
     ASSERT_TRUE(restricted) << restricted.error().detail;
@@ -148,6 +149,43 @@ TEST_F(VehicleServiceIntegration, EnforcesPerSessionPropertyAccess) {
     EXPECT_EQ(denied.error().code, api::VehicleErrorCode::kPermissionDenied);
     EXPECT_FALSE(completion_called);
     EXPECT_TRUE(stack_.transport->Requests().empty());
+
+    const auto wrong_area = stack_.service.Get(
+        restricted.value(),
+        {kVehicleSpeedProperty, 1U},
+        100ms,
+        [&completion_called](middleware::ValueResult) { completion_called = true; },
+        false);
+    ASSERT_FALSE(wrong_area);
+    EXPECT_EQ(wrong_area.error().code, api::VehicleErrorCode::kPermissionDenied);
+    EXPECT_FALSE(completion_called);
+}
+
+TEST_F(VehicleServiceIntegration, CapsSubscriptionsPerSessionBeforeTransportMutation) {
+    std::set<api::PropertyKey> readable;
+    for (std::uint32_t index = 0U; index < 33U; ++index) {
+        readable.insert({0x20000000U + index, 0U});
+    }
+    const auto bounded = stack_.service.OpenSession(
+        {"bounded-subscriber", readable, {}},
+        api::CurrentApiVersion(),
+        {[](api::PropertyEvent) {}, {}});
+    ASSERT_TRUE(bounded) << bounded.error().detail;
+
+    std::size_t accepted = 0U;
+    for (const auto& key : readable) {
+        const auto subscribed =
+            stack_.service.Subscribe(bounded.value(), key, 1.0F, 100ms);
+        if (accepted < 32U) {
+            ASSERT_TRUE(subscribed) << subscribed.error().detail;
+            ++accepted;
+        } else {
+            ASSERT_FALSE(subscribed);
+            EXPECT_EQ(subscribed.error().code, api::VehicleErrorCode::kInvalidArgument);
+        }
+    }
+    EXPECT_EQ(accepted, 32U);
+    EXPECT_EQ(stack_.transport->Requests().size(), 32U);
 }
 
 }  // namespace

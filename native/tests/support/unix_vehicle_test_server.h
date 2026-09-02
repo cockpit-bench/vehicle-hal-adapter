@@ -4,10 +4,13 @@
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <array>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -22,10 +25,17 @@ namespace fw03::test {
 
 class UnixVehicleTestServer final {
 public:
-    UnixVehicleTestServer() {
+    explicit UnixVehicleTestServer(
+        bool slow_drain_after_handshake = false,
+        bool suppress_hello_ack = false,
+        std::string fixed_path = {})
+        : slow_drain_after_handshake_(slow_drain_after_handshake),
+          suppress_hello_ack_(suppress_hello_ack) {
         static std::atomic<std::uint32_t> counter{0U};
-        path_ = "/tmp/fw03-vehicle-test-" + std::to_string(::getpid()) + "-" +
-                std::to_string(counter.fetch_add(1U)) + ".sock";
+        path_ = fixed_path.empty()
+                    ? "/tmp/fw03-vehicle-test-" + std::to_string(::getpid()) + "-" +
+                          std::to_string(counter.fetch_add(1U)) + ".sock"
+                    : std::move(fixed_path);
     }
 
     ~UnixVehicleTestServer() { Stop(); }
@@ -49,7 +59,7 @@ public:
         }
         std::memcpy(address.sun_path, path_.c_str(), path_.size() + 1U);
         if (::bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
-            ::listen(listener, 1) != 0) {
+            ::chmod(path_.c_str(), S_IRUSR | S_IWUSR) != 0 || ::listen(listener, 1) != 0) {
             ::close(listener);
             SetError("bind or listen failed");
             return false;
@@ -106,6 +116,44 @@ public:
 
     [[nodiscard]] bool SendEvent(api::PropertyEvent event) {
         return SendMessage(api::WireMessage{std::move(event)});
+    }
+
+    [[nodiscard]] bool SendPartialFrame(std::uint32_t declared_length) {
+        if (declared_length < 2U || declared_length > (1024U * 1024U) + 256U) {
+            return false;
+        }
+        std::lock_guard<std::mutex> write_lock(write_mutex_);
+        int client = -1;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            client = client_fd_;
+        }
+        const auto network_length = htonl(declared_length);
+        const std::uint8_t partial_body = 0x5aU;
+        return client >= 0 &&
+               WriteAll(
+                   client,
+                   reinterpret_cast<const std::uint8_t*>(&network_length),
+                   sizeof(network_length)) &&
+               WriteAll(client, &partial_body, sizeof(partial_body));
+    }
+
+    [[nodiscard]] bool SendInvalidFrameLength(std::uint32_t declared_length) {
+        if (declared_length != 0U && declared_length <= (1024U * 1024U) + 256U) {
+            return false;
+        }
+        std::lock_guard<std::mutex> write_lock(write_mutex_);
+        int client = -1;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            client = client_fd_;
+        }
+        const auto network_length = htonl(declared_length);
+        return client >= 0 &&
+               WriteAll(
+                   client,
+                   reinterpret_cast<const std::uint8_t*>(&network_length),
+                   sizeof(network_length));
     }
 
 private:
@@ -215,6 +263,11 @@ private:
         }
         const auto& requested = std::get<api::Hello>(decoded_hello.value()).requested_version;
         const auto negotiated = api::NegotiateApiVersion(requested, api::CurrentApiVersion());
+        if (suppress_hello_ack_) {
+            std::unique_lock<std::mutex> lock(mutex_);
+            requests_available_.wait(lock, [this] { return stopping_; });
+            return;
+        }
         api::HelloAck ack;
         if (negotiated) {
             ack.negotiated_version = negotiated.value();
@@ -223,6 +276,22 @@ private:
             ack.error = negotiated.error();
         }
         if (!SendMessage(api::WireMessage{ack}) || !negotiated) {
+            return;
+        }
+
+        if (slow_drain_after_handshake_) {
+            std::array<std::uint8_t, 1024U> slow_buffer{};
+            while (!IsStopping()) {
+                const auto received =
+                    ::recv(client, slow_buffer.data(), slow_buffer.size(), MSG_DONTWAIT);
+                if (received == 0) {
+                    return;
+                }
+                if (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds{10});
+            }
             return;
         }
 
@@ -287,6 +356,8 @@ private:
     int listener_fd_{-1};
     int client_fd_{-1};
     bool stopping_{true};
+    const bool slow_drain_after_handshake_{false};
+    const bool suppress_hello_ack_{false};
 };
 
 }  // namespace fw03::test

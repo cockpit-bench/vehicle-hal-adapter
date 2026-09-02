@@ -34,7 +34,11 @@ public:
     VehicleStack()
         : transport(std::make_shared<testing::NiceMock<MockVehicleTransport>>()),
           hal(transport, clock, executor),
-          gateway(hal),
+          gateway(
+              hal,
+              clock,
+              {{kVehicleSpeedProperty, std::chrono::milliseconds{250}},
+               {kCabinTemperatureProperty, std::chrono::milliseconds{2000}}}),
           service(gateway) {}
 
     [[nodiscard]] common::Result<api::ApiVersion, api::VehicleError> Start() {
@@ -49,8 +53,8 @@ public:
         }
         return service.OpenSession(
             {std::move(name),
-             {kVehicleSpeedProperty, kCabinTemperatureProperty},
-             {kVehicleSpeedProperty, kCabinTemperatureProperty}},
+             {kVehicleSpeedKey, kCabinTemperatureKey},
+             {kVehicleSpeedKey, kCabinTemperatureKey}},
             api::CurrentApiVersion(),
             std::move(callbacks));
     }

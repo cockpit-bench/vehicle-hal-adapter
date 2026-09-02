@@ -1,4 +1,5 @@
 #include "fw03/api/vehicle_contract.h"
+#include "fw03/api/vehicle_hal_contract_descriptor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -85,6 +86,12 @@ bool operator==(const VehiclePropertyValue& lhs, const VehiclePropertyValue& rhs
 
 bool operator!=(const VehiclePropertyValue& lhs, const VehiclePropertyValue& rhs) noexcept {
     return !(lhs == rhs);
+}
+
+ContractDescriptorView VehicleHalContractDescriptor() noexcept {
+    return {
+        generated::kVehicleHalContractDescriptor,
+        generated::kVehicleHalContractDescriptorSize};
 }
 
 common::Result<void, VehicleError> ValidateRequest(const TransportRequest& request) {

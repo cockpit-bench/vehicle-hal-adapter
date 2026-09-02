@@ -9,6 +9,18 @@
 
 namespace fw03::api {
 
+inline constexpr std::uint32_t kVehicleWireMagic = 0x46573033U;
+inline constexpr std::uint16_t kVehicleWireMajor = 1U;
+inline constexpr std::uint16_t kVehicleWireMinor = 0U;
+
+enum class WireMessageKind : std::uint8_t {
+    kHello = 1U,
+    kHelloAck = 2U,
+    kRequest = 3U,
+    kResponse = 4U,
+    kEvent = 5U,
+};
+
 struct Hello final {
     ApiVersion requested_version;
 };

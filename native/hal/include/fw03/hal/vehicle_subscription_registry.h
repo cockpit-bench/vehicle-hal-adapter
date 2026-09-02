@@ -20,6 +20,11 @@ struct EffectiveSubscription final {
     float sample_rate_hz{0.0F};
 };
 
+struct SubscriptionUpdate final {
+    api::PropertyKey key;
+    SubscriptionChange change;
+};
+
 class VehicleSubscriptionRegistry final {
 public:
     [[nodiscard]] common::Result<SubscriptionChange, api::VehicleError> AddOrUpdate(
@@ -30,6 +35,9 @@ public:
     [[nodiscard]] SubscriptionChange Remove(
         api::SubscriberId subscriber_id,
         api::PropertyKey key);
+
+    [[nodiscard]] std::vector<SubscriptionUpdate> RemoveSubscriber(
+        api::SubscriberId subscriber_id);
 
     [[nodiscard]] std::vector<EffectiveSubscription> Snapshot() const;
     void Clear() noexcept;

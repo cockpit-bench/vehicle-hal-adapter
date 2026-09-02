@@ -1,0 +1,9 @@
+#pragma once
+
+namespace fw03::application::profile {
+
+inline constexpr char kName[] = "@FW03_PLATFORM_PROFILE@";
+inline constexpr char kDefaultHalSocket[] = "@FW03_PROFILE_HAL_SOCKET@";
+inline constexpr char kDefaultClientSocket[] = "@FW03_PROFILE_CLIENT_SOCKET@";
+
+}  // namespace fw03::application::profile

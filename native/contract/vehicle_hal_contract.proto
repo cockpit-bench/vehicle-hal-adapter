@@ -87,10 +87,67 @@ message CapabilityHelloAck {
   string detail = 3;
 }
 
+// Canonical host/target transport mapping. The C++ codec uses a bounded fixed-width encoding of
+// these exact fields rather than linking a protobuf runtime into the embedded process.
+enum TransportOperation {
+  TRANSPORT_OPERATION_UNSPECIFIED = 0;
+  TRANSPORT_OPERATION_GET = 1;
+  TRANSPORT_OPERATION_SET = 2;
+  TRANSPORT_OPERATION_SUBSCRIBE = 3;
+  TRANSPORT_OPERATION_UNSUBSCRIBE = 4;
+}
+
+enum WireMessageKind {
+  WIRE_MESSAGE_KIND_UNSPECIFIED = 0;
+  WIRE_MESSAGE_KIND_HELLO = 1;
+  WIRE_MESSAGE_KIND_HELLO_ACK = 2;
+  WIRE_MESSAGE_KIND_REQUEST = 3;
+  WIRE_MESSAGE_KIND_RESPONSE = 4;
+  WIRE_MESSAGE_KIND_EVENT = 5;
+}
+
+message VehicleError {
+  ErrorCode code = 1;
+  string detail = 2;
+  uint64 request_id = 3;
+}
+
+message TransportRequest {
+  uint64 request_id = 1;
+  TransportOperation operation = 2;
+  PropertyKey key = 3;
+  float sample_rate_hz = 4;
+  optional PropertyValue value = 5;
+}
+
+message TransportResponse {
+  uint64 request_id = 1;
+  VehicleError error = 2;
+  optional PropertyValue value = 3;
+}
+
+message WireEnvelope {
+  fixed32 magic = 1;       // 0x46573033 ("FW03")
+  uint32 wire_major = 2;  // currently 1
+  uint32 wire_minor = 3;  // currently 0
+  WireMessageKind kind = 4;
+  oneof body {
+    CapabilityHello hello = 10;
+    CapabilityHelloAck hello_ack = 11;
+    TransportRequest request = 12;
+    TransportResponse response = 13;
+    PropertyEvent event = 14;
+  }
+}
+
 service VehicleHalContract {
   rpc GetProperty(GetPropertyRequest) returns (PropertyResponse);
   rpc SetProperty(SetPropertyRequest) returns (PropertyResponse);
   rpc Subscribe(SubscribeRequest) returns (PropertyResponse);
   rpc Unsubscribe(UnsubscribeRequest) returns (PropertyResponse);
   rpc StreamEvents(SubscribeRequest) returns (stream PropertyEvent);
+}
+
+service VehicleWireContract {
+  rpc Exchange(stream WireEnvelope) returns (stream WireEnvelope);
 }

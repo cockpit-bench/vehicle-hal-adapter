@@ -9,18 +9,7 @@
 namespace fw03::api {
 namespace {
 
-constexpr std::uint32_t kWireMagic = 0x46573033U;
-constexpr std::uint16_t kWireMajor = 1U;
-constexpr std::uint16_t kWireMinor = 0U;
 constexpr std::size_t kMaximumVariableFieldBytes = 1024U * 1024U;
-
-enum class WireKind : std::uint8_t {
-    kHello = 1U,
-    kHelloAck = 2U,
-    kRequest = 3U,
-    kResponse = 4U,
-    kEvent = 5U,
-};
 
 template <typename T>
 void AppendUnsigned(std::vector<std::uint8_t>& bytes, T value) {
@@ -307,10 +296,10 @@ bool DecodeValue(Reader& reader, VehiclePropertyValue& value) {
     return true;
 }
 
-void EncodeHeader(std::vector<std::uint8_t>& bytes, WireKind kind) {
-    AppendUnsigned(bytes, kWireMagic);
-    AppendUnsigned(bytes, kWireMajor);
-    AppendUnsigned(bytes, kWireMinor);
+void EncodeHeader(std::vector<std::uint8_t>& bytes, WireMessageKind kind) {
+    AppendUnsigned(bytes, kVehicleWireMagic);
+    AppendUnsigned(bytes, kVehicleWireMajor);
+    AppendUnsigned(bytes, kVehicleWireMinor);
     AppendUnsigned(bytes, static_cast<std::uint8_t>(kind));
 }
 
@@ -327,10 +316,10 @@ common::Result<std::vector<std::uint8_t>, VehicleError> EncodeWireMessage(
 
     bool encoded = true;
     if (const auto* hello = std::get_if<Hello>(&message)) {
-        EncodeHeader(bytes, WireKind::kHello);
+        EncodeHeader(bytes, WireMessageKind::kHello);
         EncodeVersion(bytes, hello->requested_version);
     } else if (const auto* ack = std::get_if<HelloAck>(&message)) {
-        EncodeHeader(bytes, WireKind::kHelloAck);
+        EncodeHeader(bytes, WireMessageKind::kHelloAck);
         encoded = EncodeError(bytes, ack->error);
         EncodeVersion(bytes, ack->negotiated_version);
     } else if (const auto* request = std::get_if<TransportRequest>(&message)) {
@@ -338,7 +327,7 @@ common::Result<std::vector<std::uint8_t>, VehicleError> EncodeWireMessage(
         if (!validation) {
             return common::Result<std::vector<std::uint8_t>, VehicleError>::Failure(validation.error());
         }
-        EncodeHeader(bytes, WireKind::kRequest);
+        EncodeHeader(bytes, WireMessageKind::kRequest);
         AppendUnsigned(bytes, request->request_id);
         AppendUnsigned(bytes, static_cast<std::uint8_t>(request->operation));
         EncodeKey(bytes, request->key);
@@ -348,7 +337,7 @@ common::Result<std::vector<std::uint8_t>, VehicleError> EncodeWireMessage(
             encoded = EncodeValue(bytes, *request->value);
         }
     } else if (const auto* response = std::get_if<TransportResponse>(&message)) {
-        EncodeHeader(bytes, WireKind::kResponse);
+        EncodeHeader(bytes, WireMessageKind::kResponse);
         AppendUnsigned(bytes, response->request_id);
         encoded = EncodeError(bytes, response->error);
         AppendUnsigned(bytes, static_cast<std::uint8_t>(response->value.has_value() ? 1U : 0U));
@@ -356,7 +345,7 @@ common::Result<std::vector<std::uint8_t>, VehicleError> EncodeWireMessage(
             encoded = encoded && EncodeValue(bytes, *response->value);
         }
     } else if (const auto* event = std::get_if<PropertyEvent>(&message)) {
-        EncodeHeader(bytes, WireKind::kEvent);
+        EncodeHeader(bytes, WireMessageKind::kEvent);
         AppendUnsigned(bytes, event->sequence);
         encoded = EncodeValue(bytes, event->value);
     } else {
@@ -378,16 +367,17 @@ common::Result<WireMessage, VehicleError> DecodeWireMessage(
     std::uint16_t minor = 0U;
     std::uint8_t raw_kind = 0U;
     if (!reader.ReadUnsigned(magic) || !reader.ReadUnsigned(major) ||
-        !reader.ReadUnsigned(minor) || !reader.ReadUnsigned(raw_kind) || magic != kWireMagic ||
-        major != kWireMajor || minor > kWireMinor) {
+        !reader.ReadUnsigned(minor) || !reader.ReadUnsigned(raw_kind) ||
+        magic != kVehicleWireMagic || major != kVehicleWireMajor ||
+        minor > kVehicleWireMinor) {
         return common::Result<WireMessage, VehicleError>::Failure(
             Malformed("invalid wire header or unsupported framing version"));
     }
 
-    const auto kind = static_cast<WireKind>(raw_kind);
+    const auto kind = static_cast<WireMessageKind>(raw_kind);
     WireMessage message;
     switch (kind) {
-        case WireKind::kHello: {
+        case WireMessageKind::kHello: {
             Hello hello;
             if (!DecodeVersion(reader, hello.requested_version)) {
                 return common::Result<WireMessage, VehicleError>::Failure(Malformed("malformed hello"));
@@ -395,7 +385,7 @@ common::Result<WireMessage, VehicleError> DecodeWireMessage(
             message = hello;
             break;
         }
-        case WireKind::kHelloAck: {
+        case WireMessageKind::kHelloAck: {
             HelloAck ack;
             if (!DecodeError(reader, ack.error) || !DecodeVersion(reader, ack.negotiated_version)) {
                 return common::Result<WireMessage, VehicleError>::Failure(Malformed("malformed hello ack"));
@@ -403,7 +393,7 @@ common::Result<WireMessage, VehicleError> DecodeWireMessage(
             message = std::move(ack);
             break;
         }
-        case WireKind::kRequest: {
+        case WireMessageKind::kRequest: {
             TransportRequest request;
             std::uint8_t operation = 0U;
             std::uint8_t has_value = 0U;
@@ -429,7 +419,7 @@ common::Result<WireMessage, VehicleError> DecodeWireMessage(
             message = std::move(request);
             break;
         }
-        case WireKind::kResponse: {
+        case WireMessageKind::kResponse: {
             TransportResponse response;
             std::uint8_t has_value = 0U;
             if (!reader.ReadUnsigned(response.request_id) || !DecodeError(reader, response.error) ||
@@ -446,7 +436,7 @@ common::Result<WireMessage, VehicleError> DecodeWireMessage(
             message = std::move(response);
             break;
         }
-        case WireKind::kEvent: {
+        case WireMessageKind::kEvent: {
             PropertyEvent event;
             if (!reader.ReadUnsigned(event.sequence) || !DecodeValue(reader, event.value)) {
                 return common::Result<WireMessage, VehicleError>::Failure(Malformed("malformed event"));

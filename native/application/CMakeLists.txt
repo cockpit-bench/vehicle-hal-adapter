@@ -1,8 +1,14 @@
 add_library(fw03_vehicle_service STATIC
+    src/daemon_options.cpp
+    src/vehicle_client_session.cpp
     src/vehicle_service.cpp)
 
 target_include_directories(fw03_vehicle_service PUBLIC include)
-target_link_libraries(fw03_vehicle_service PUBLIC fw03_vehicle_middleware)
+target_link_libraries(
+    fw03_vehicle_service
+    PUBLIC
+        fw03_vehicle_middleware
+        fw03_vehicle_contract)
 fw03_apply_warnings(fw03_vehicle_service)
 fw03_apply_runtime_checks(fw03_vehicle_service)
 

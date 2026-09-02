@@ -5,10 +5,13 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -180,6 +183,78 @@ TEST(ContractCommonIntegration, MapsUnknownPeerErrorToInternal) {
               api::VehicleErrorCode::kInternal);
 }
 
+TEST(ContractCommonIntegration, EmbedsThePinnedCanonicalProtobufDescriptor) {
+    const auto descriptor = api::VehicleHalContractDescriptor();
+    ASSERT_NE(descriptor.data, nullptr);
+    ASSERT_GT(descriptor.size, 512U);
+    const std::string bytes(
+        reinterpret_cast<const char*>(descriptor.data),
+        descriptor.size);
+    EXPECT_NE(bytes.find("VehicleHalContract"), std::string::npos);
+    EXPECT_NE(bytes.find("GetProperty"), std::string::npos);
+    EXPECT_NE(bytes.find("StreamEvents"), std::string::npos);
+}
+
+TEST(ContractCommonIntegration, MatchesVersionedFixedWidthWireGoldenVectors) {
+    const api::Hello hello{{1U, 2U, 3U, 1U}};
+    const std::vector<std::uint8_t> hello_v1{
+        0x33U, 0x30U, 0x57U, 0x46U, 0x01U, 0x00U, 0x00U, 0x00U, 0x01U,
+        0x01U, 0x00U, 0x02U, 0x00U, 0x03U, 0x00U, 0x01U, 0x00U};
+    const auto encoded_hello = api::EncodeWireMessage(api::WireMessage{hello});
+    ASSERT_TRUE(encoded_hello) << encoded_hello.error().detail;
+    EXPECT_EQ(encoded_hello.value(), hello_v1);
+
+    const api::TransportRequest request{
+        0x0102030405060708ULL,
+        api::TransportOperation::kGet,
+        {0x11223344U, 0x55667788U},
+        0.0F,
+        std::nullopt};
+    const std::vector<std::uint8_t> request_v1{
+        0x33U, 0x30U, 0x57U, 0x46U, 0x01U, 0x00U, 0x00U, 0x00U, 0x03U,
+        0x08U, 0x07U, 0x06U, 0x05U, 0x04U, 0x03U, 0x02U, 0x01U, 0x01U,
+        0x44U, 0x33U, 0x22U, 0x11U, 0x88U, 0x77U, 0x66U, 0x55U,
+        0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+    const auto encoded_request = api::EncodeWireMessage(api::WireMessage{request});
+    ASSERT_TRUE(encoded_request) << encoded_request.error().detail;
+    EXPECT_EQ(encoded_request.value(), request_v1);
+    const auto decoded_request = api::DecodeWireMessage(request_v1);
+    ASSERT_TRUE(decoded_request) << decoded_request.error().detail;
+    ASSERT_TRUE(std::holds_alternative<api::TransportRequest>(decoded_request.value()));
+    EXPECT_EQ(std::get<api::TransportRequest>(decoded_request.value()).request_id,
+              request.request_id);
+
+    const api::TransportResponse response{
+        request.request_id,
+        {api::VehicleErrorCode::kPermissionDenied, "no", request.request_id},
+        std::nullopt};
+    const std::vector<std::uint8_t> response_v1{
+        0x33U, 0x30U, 0x57U, 0x46U, 0x01U, 0x00U, 0x00U, 0x00U, 0x04U,
+        0x08U, 0x07U, 0x06U, 0x05U, 0x04U, 0x03U, 0x02U, 0x01U,
+        0x03U, 0x00U, 0x00U, 0x00U,
+        0x08U, 0x07U, 0x06U, 0x05U, 0x04U, 0x03U, 0x02U, 0x01U,
+        0x02U, 0x00U, 0x00U, 0x00U, 0x6eU, 0x6fU, 0x00U};
+    const auto encoded_response = api::EncodeWireMessage(api::WireMessage{response});
+    ASSERT_TRUE(encoded_response) << encoded_response.error().detail;
+    EXPECT_EQ(encoded_response.value(), response_v1);
+
+    const api::PropertyEvent event{
+        request.request_id,
+        {{0x11223344U, 0x55667788U},
+         static_cast<std::int64_t>(0x0102030405060708ULL),
+         api::PropertyStatus::kAvailable,
+         std::int32_t{-2}}};
+    const std::vector<std::uint8_t> event_v1{
+        0x33U, 0x30U, 0x57U, 0x46U, 0x01U, 0x00U, 0x00U, 0x00U, 0x05U,
+        0x08U, 0x07U, 0x06U, 0x05U, 0x04U, 0x03U, 0x02U, 0x01U,
+        0x44U, 0x33U, 0x22U, 0x11U, 0x88U, 0x77U, 0x66U, 0x55U,
+        0x08U, 0x07U, 0x06U, 0x05U, 0x04U, 0x03U, 0x02U, 0x01U,
+        0x00U, 0x01U, 0xfeU, 0xffU, 0xffU, 0xffU};
+    const auto encoded_event = api::EncodeWireMessage(api::WireMessage{event});
+    ASSERT_TRUE(encoded_event) << encoded_event.error().detail;
+    EXPECT_EQ(encoded_event.value(), event_v1);
+}
+
 TEST(ContractCommonIntegration, SerialExecutorOrdersDrainsAndStopsTasks) {
     common::SerialExecutor executor;
     std::vector<std::uint32_t> order;
@@ -199,6 +274,139 @@ TEST(ContractCommonIntegration, SerialExecutorOrdersDrainsAndStopsTasks) {
     executor.Shutdown();
     EXPECT_FALSE(executor.Post([] {}));
     EXPECT_FALSE(executor.Post({}));
+}
+
+TEST(ContractCommonIntegration, SerialExecutorWorkerShutdownDoesNotDeadlockExternalJoin) {
+    common::SerialExecutor executor;
+    std::mutex barrier_mutex;
+    std::condition_variable barrier_changed;
+    bool worker_entered = false;
+    bool allow_worker_shutdown = false;
+    std::atomic<bool> worker_shutdown_completed{false};
+    std::atomic<bool> external_shutdown_completed{false};
+    ASSERT_TRUE(executor.Post([&] {
+        {
+            std::unique_lock<std::mutex> lock(barrier_mutex);
+            worker_entered = true;
+            barrier_changed.notify_all();
+            barrier_changed.wait(lock, [&] { return allow_worker_shutdown; });
+        }
+        executor.Shutdown();
+        worker_shutdown_completed.store(true);
+    }));
+    {
+        std::unique_lock<std::mutex> lock(barrier_mutex);
+        ASSERT_TRUE(barrier_changed.wait_for(
+            lock,
+            std::chrono::seconds{1},
+            [&] { return worker_entered; }));
+    }
+
+    std::thread external_shutdown([&] {
+        executor.Shutdown();
+        external_shutdown_completed.store(true);
+    });
+    {
+        std::lock_guard<std::mutex> lock(barrier_mutex);
+        allow_worker_shutdown = true;
+    }
+    barrier_changed.notify_all();
+    external_shutdown.join();
+
+    EXPECT_TRUE(worker_shutdown_completed.load());
+    EXPECT_TRUE(external_shutdown_completed.load());
+    EXPECT_FALSE(executor.Post([] {}));
+    executor.Shutdown();
+}
+
+TEST(ContractCommonIntegration, SerialExecutorBoundsAndCoalescesPendingWork) {
+    common::SerialExecutor executor(4U);
+    std::mutex gate_mutex;
+    std::condition_variable gate_available;
+    bool blocker_started = false;
+    bool release_blocker = false;
+    ASSERT_TRUE(executor.Post([&] {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+        blocker_started = true;
+        gate_available.notify_all();
+        gate_available.wait(lock, [&release_blocker] { return release_blocker; });
+    }));
+    {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+        ASSERT_TRUE(gate_available.wait_for(
+            lock,
+            std::chrono::seconds{1},
+            [&blocker_started] { return blocker_started; }));
+    }
+
+    std::atomic<std::uint32_t> latest_value{0U};
+    std::atomic<std::size_t> coalesced_executions{0U};
+    for (std::uint32_t value = 1U; value <= 100U; ++value) {
+        ASSERT_TRUE(executor.PostCoalescing(7U, [value, &latest_value, &coalesced_executions] {
+            latest_value.store(value);
+            coalesced_executions.fetch_add(1U);
+        }));
+    }
+    ASSERT_TRUE(executor.PostCoalescing(8U, [] {}));
+    ASSERT_TRUE(executor.PostCoalescing(9U, [] {}));
+    ASSERT_TRUE(executor.PostCoalescing(10U, [] {}));
+    EXPECT_EQ(executor.PendingTaskCount(), 4U);
+    EXPECT_GE(executor.CoalescedTaskCount(), 99U);
+    EXPECT_FALSE(executor.PostCoalescing(11U, [] {}));
+    EXPECT_EQ(executor.RejectedTaskCount(), 1U);
+
+    {
+        std::lock_guard<std::mutex> lock(gate_mutex);
+        release_blocker = true;
+    }
+    gate_available.notify_all();
+    executor.Drain();
+    EXPECT_EQ(latest_value.load(), 100U);
+    EXPECT_EQ(coalesced_executions.load(), 1U);
+    executor.Shutdown();
+}
+
+TEST(ContractCommonIntegration, SerialExecutorControlDiscardsOnlyObsoleteEventGeneration) {
+    common::SerialExecutor executor(3U);
+    std::mutex gate_mutex;
+    std::condition_variable gate_available;
+    bool blocker_started = false;
+    bool release_blocker = false;
+    ASSERT_TRUE(executor.Post([&] {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+        blocker_started = true;
+        gate_available.notify_all();
+        gate_available.wait(lock, [&release_blocker] { return release_blocker; });
+    }));
+    {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+        ASSERT_TRUE(gate_available.wait_for(
+            lock,
+            std::chrono::seconds{1},
+            [&blocker_started] { return blocker_started; }));
+    }
+
+    std::vector<std::uint32_t> execution_order;
+    ASSERT_TRUE(executor.PostCoalescing(
+        10U, [&execution_order] { execution_order.push_back(1U); }));
+    ASSERT_TRUE(executor.PostEventCoalescing(
+        20U, 1U, [&execution_order] { execution_order.push_back(2U); }));
+    ASSERT_TRUE(executor.PostEventCoalescing(
+        30U, 2U, [&execution_order] { execution_order.push_back(3U); }));
+    ASSERT_TRUE(executor.PostConnectionControl(
+        1U, [&execution_order] { execution_order.push_back(4U); }));
+    EXPECT_EQ(executor.PendingTaskCount(), 3U);
+    EXPECT_EQ(executor.DiscardedCoalescingTaskCount(), 1U);
+    EXPECT_EQ(executor.RejectedControlTaskCount(), 0U);
+
+    {
+        std::lock_guard<std::mutex> lock(gate_mutex);
+        release_blocker = true;
+    }
+    gate_available.notify_all();
+    executor.Drain();
+    EXPECT_EQ(execution_order, (std::vector<std::uint32_t>{1U, 3U, 4U}));
+    executor.Shutdown();
 }
 
 }  // namespace
