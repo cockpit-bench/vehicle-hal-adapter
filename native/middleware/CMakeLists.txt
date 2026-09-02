@@ -1,0 +1,7 @@
+add_library(fw03_vehicle_middleware STATIC
+    src/vehicle_property_gateway.cpp)
+
+target_include_directories(fw03_vehicle_middleware PUBLIC include)
+target_link_libraries(fw03_vehicle_middleware PUBLIC fw03_vehicle_hal)
+fw03_apply_warnings(fw03_vehicle_middleware)
+fw03_apply_runtime_checks(fw03_vehicle_middleware)

@@ -1,0 +1,104 @@
+name: native-ci
+
+on:
+  push:
+    paths:
+      - "native/**"
+      - ".github/workflows/native-ci.yml"
+  pull_request:
+    paths:
+      - "native/**"
+      - ".github/workflows/native-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned host build tools
+        run: python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4
+      - name: Configure
+        run: >-
+          cmake -S native -B "${{ runner.temp }}/fw03-${{ matrix.build_type }}"
+          -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build "${{ runner.temp }}/fw03-${{ matrix.build_type }}" --parallel
+      - name: Test and emit JUnit
+        run: >-
+          ctest --test-dir "${{ runner.temp }}/fw03-${{ matrix.build_type }}"
+          --output-on-failure
+          --output-junit "${{ runner.temp }}/fw03-${{ matrix.build_type }}/test-results.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "fw03-${{ matrix.build_type }}-test-results"
+          path: "${{ runner.temp }}/fw03-${{ matrix.build_type }}/test-results.xml"
+
+  sanitizer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4
+      - run: >-
+          cmake -S native -B "${{ runner.temp }}/fw03-sanitized" -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
+          -DENABLE_ASAN=ON -DENABLE_UBSAN=ON
+      - run: cmake --build "${{ runner.temp }}/fw03-sanitized" --parallel
+      - run: ctest --test-dir "${{ runner.temp }}/fw03-sanitized" --output-on-failure
+
+  coverage-and-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned analysis tools
+        run: |
+          python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4 gcovr==7.2
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+      - run: >-
+          cmake -S native -B "${{ runner.temp }}/fw03-coverage" -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
+          -DENABLE_COVERAGE=ON
+      - run: cmake --build "${{ runner.temp }}/fw03-coverage" --parallel
+      - run: >-
+          ctest --test-dir "${{ runner.temp }}/fw03-coverage" --output-on-failure
+          --output-junit "${{ runner.temp }}/fw03-coverage/test-results.xml"
+      - name: Build deterministic protocol descriptor
+        run: >-
+          protoc --proto_path=native/contract
+          --include_imports
+          --descriptor_set_out="${{ runner.temp }}/fw03-coverage/vehicle_hal_contract.pb"
+          native/contract/vehicle_hal_contract.proto
+      - name: Coverage reports
+        run: >-
+          gcovr --root native --filter native --exclude 'native/tests/.*'
+          --object-directory "${{ runner.temp }}/fw03-coverage"
+          --xml "${{ runner.temp }}/fw03-coverage/coverage.xml"
+          --html-details "${{ runner.temp }}/fw03-coverage/coverage.html"
+          --fail-under-line 80
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fw03-coverage-contract-reports
+          path: |
+            ${{ runner.temp }}/fw03-coverage/test-results.xml
+            ${{ runner.temp }}/fw03-coverage/coverage.xml
+            ${{ runner.temp }}/fw03-coverage/coverage.html
+            ${{ runner.temp }}/fw03-coverage/vehicle_hal_contract.pb
