@@ -25,12 +25,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
       - name: Install pinned host build tools
         run: python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4
       - name: Configure
         run: >-
           cmake -S native -B "${{ runner.temp }}/fw03-${{ matrix.build_type }}"
           -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DFW03_PROTOC_EXECUTABLE="$(command -v protoc)"
           -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
       - name: Build
         run: cmake --build "${{ runner.temp }}/fw03-${{ matrix.build_type }}" --parallel
@@ -52,10 +56,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
       - run: python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4
       - run: >-
           cmake -S native -B "${{ runner.temp }}/fw03-sanitized" -G Ninja
           -DCMAKE_BUILD_TYPE=Debug -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
+          -DFW03_PROTOC_EXECUTABLE="$(command -v protoc)"
           -DENABLE_ASAN=ON -DENABLE_UBSAN=ON
       - run: cmake --build "${{ runner.temp }}/fw03-sanitized" --parallel
       - run: ctest --test-dir "${{ runner.temp }}/fw03-sanitized" --output-on-failure
@@ -67,14 +75,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
       - name: Install pinned analysis tools
         run: |
           python -m pip install --disable-pip-version-check cmake==3.31.6 ninja==1.11.1.4 gcovr==7.2
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
       - run: >-
           cmake -S native -B "${{ runner.temp }}/fw03-coverage" -G Ninja
           -DCMAKE_BUILD_TYPE=Debug -DFW_PLATFORM=host_posix -DBUILD_TESTING=ON
+          -DFW03_PROTOC_EXECUTABLE="$(command -v protoc)"
           -DENABLE_COVERAGE=ON
       - run: cmake --build "${{ runner.temp }}/fw03-coverage" --parallel
       - run: >-
