@@ -1,0 +1,99 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "host-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "$penv{HOME}/.cache/fw03-vehicle-hal-adapter/${presetName}",
+      "cacheVariables": {
+        "FW_PLATFORM": "host_posix",
+        "BUILD_TESTING": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "host-debug",
+      "inherits": "host-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "host-release",
+      "inherits": "host-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "host-release-sa8155",
+      "inherits": "host-release",
+      "cacheVariables": {
+        "FW03_PLATFORM_PROFILE": "sa8155"
+      }
+    },
+    {
+      "name": "host-release-sa8295",
+      "inherits": "host-release",
+      "cacheVariables": {
+        "FW03_PLATFORM_PROFILE": "sa8295"
+      }
+    },
+    {
+      "name": "host-sanitized",
+      "inherits": "host-debug",
+      "cacheVariables": {
+        "ENABLE_ASAN": "ON",
+        "ENABLE_UBSAN": "ON"
+      }
+    },
+    {
+      "name": "coverage",
+      "inherits": "host-debug",
+      "cacheVariables": {
+        "ENABLE_COVERAGE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host-debug", "configurePreset": "host-debug" },
+    { "name": "host-release", "configurePreset": "host-release" },
+    { "name": "host-release-sa8155", "configurePreset": "host-release-sa8155" },
+    { "name": "host-release-sa8295", "configurePreset": "host-release-sa8295" },
+    { "name": "host-sanitized", "configurePreset": "host-sanitized" },
+    { "name": "coverage", "configurePreset": "coverage" }
+  ],
+  "testPresets": [
+    {
+      "name": "host-debug",
+      "configurePreset": "host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-release-sa8155",
+      "configurePreset": "host-release-sa8155",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-release-sa8295",
+      "configurePreset": "host-release-sa8295",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-sanitized",
+      "configurePreset": "host-sanitized",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
