@@ -150,6 +150,9 @@ common::Result<void, api::VehicleError> VerifyConnectedPeer(
     int socket_fd,
     std::uint32_t expected_user_id,
     std::uint32_t expected_group_id) {
+    // SO_PEERCRED is a Linux-only verification aid contained by the transport adapter.
+    // Migrate to the versioned transport identity exchange when every target implements
+    // that contract; callers remain independent of this extension.
 #ifdef SO_PEERCRED
     struct KernelPeerCredentials final {
         pid_t process_id;

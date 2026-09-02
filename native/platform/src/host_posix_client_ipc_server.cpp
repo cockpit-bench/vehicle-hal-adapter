@@ -1019,6 +1019,9 @@ private:
     }
 
     common::Result<api::PeerCredentials, api::VehicleError> ReadPeerCredentials(int client) const {
+        // SO_PEERCRED is a Linux extension confined to this host adapter. The portable
+        // migration path is the versioned peer-identity field in the IPC handshake; keep
+        // business/HAL code dependent only on PeerCredentials.
 #ifdef SO_PEERCRED
         struct KernelPeerCredentials final {
             pid_t process_id;
