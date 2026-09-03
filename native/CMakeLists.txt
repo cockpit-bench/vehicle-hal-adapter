@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(
     fw03_vehicle_hal_adapter
     VERSION 1.0.1
-    DESCRIPTION "Versioned embedded vehicle-property HAL adapter"
+    DESCRIPTION "Versioned Android vehicle-property HAL adapter"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -17,8 +17,8 @@ option(FW03_WARNINGS_AS_ERRORS "Treat production and test warnings as errors" ON
 option(ENABLE_ASAN "Enable AddressSanitizer for host validation" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for host validation" OFF)
 option(ENABLE_COVERAGE "Enable GCC/Clang source coverage" OFF)
-set(FW_PLATFORM "host_posix" CACHE STRING "Platform adapter: host_posix, android_ndk, or qnx")
-set_property(CACHE FW_PLATFORM PROPERTY STRINGS host_posix android_ndk qnx)
+set(FW_PLATFORM "host_posix" CACHE STRING "Platform adapter: host_posix or android_ndk")
+set_property(CACHE FW_PLATFORM PROPERTY STRINGS host_posix android_ndk)
 set(FW03_PLATFORM_PROFILE "generic" CACHE STRING "Runtime endpoint profile: generic, sa8155, or sa8295")
 set_property(CACHE FW03_PLATFORM_PROFILE PROPERTY STRINGS generic sa8155 sa8295)
 

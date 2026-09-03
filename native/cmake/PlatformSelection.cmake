@@ -1,5 +1,5 @@
 function(fw03_validate_platform platform)
-    set(valid_platforms host_posix android_ndk qnx)
+    set(valid_platforms host_posix android_ndk)
     if(NOT platform IN_LIST valid_platforms)
         message(FATAL_ERROR "Unsupported FW_PLATFORM='${platform}'. Expected one of: ${valid_platforms}")
     endif()

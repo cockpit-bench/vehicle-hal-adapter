@@ -11,7 +11,7 @@ namespace fw03::api {
 
 // Neutral inbound IPC port shared by the application policy and platform
 // listener.  Keeping this contract outside the platform module prevents the
-// application layer from depending on a host/QNX/MCU implementation boundary.
+// application layer from depending on a host or Android implementation boundary.
 struct PeerCredentials final {
     std::int64_t process_id{-1};
     std::uint32_t user_id{0U};
